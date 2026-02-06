@@ -1,0 +1,18 @@
+# Changes here will be overwritten by Copier; NEVER EDIT MANUALLY
+_commit: v2.0.1
+_src_path: https://github.com/napari/napari-plugin-template
+display_name: Myelin Quantifier
+email: wulinteo.usa2@gmail.com
+full_name: Napari User
+github_repository_url: https://github.com/wulinteousa2-hash/napari-myelin-quantifier
+github_username_or_organization: wulinteousa2-hash
+include_reader_plugin: true
+include_sample_data_plugin: true
+include_widget_plugin: true
+include_writer_plugin: true
+install_dependabot: true
+install_precommit: true
+license: MIT
+module_name: napari_myelin_quantifier
+plugin_name: napari-myelin-quantifier
+short_description: Quantify myelinated axons with label tracking

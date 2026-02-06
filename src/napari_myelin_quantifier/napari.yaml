@@ -1,0 +1,18 @@
+name: napari-myelin-quantifier
+display_name: Myelin Quantifier
+visibility: public
+
+contributions:
+  commands:
+    - id: napari-myelin-quantifier.myelin_quantifier_widget
+      python_name: napari_myelin_quantifier._widget:myelin_quantifier_widget
+      title: Myelin Quantifier (Axon Counter)
+
+  widgets:
+    - command: napari-myelin-quantifier.myelin_quantifier_widget
+      display_name: Myelin Quantifier
+
+  menus:
+    napari/plugins:
+      - command: napari-myelin-quantifier.myelin_quantifier_widget
+        when: always
