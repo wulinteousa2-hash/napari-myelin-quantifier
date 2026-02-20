@@ -27,7 +27,7 @@ It enables reproducible extraction of:
 Install via pip:
 
 ```bash
-pip install "napari-myelin-quantifier[all]"
+pip install napari-myelin-quantifier
 ```
 If napari is not installed:
 ```bash
