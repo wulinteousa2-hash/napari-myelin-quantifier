@@ -3,77 +3,162 @@
 [![License MIT](https://img.shields.io/pypi/l/napari-myelin-quantifier.svg?color=green)](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/raw/main/LICENSE)
 [![PyPI](https://img.shields.io/pypi/v/napari-myelin-quantifier.svg?color=green)](https://pypi.org/project/napari-myelin-quantifier)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-myelin-quantifier.svg?color=green)](https://python.org)
-[![tests](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/workflows/tests/badge.svg)](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/actions)
-[![codecov](https://codecov.io/gh/wulinteousa2-hash/napari-myelin-quantifier/branch/main/graph/badge.svg)](https://codecov.io/gh/wulinteousa2-hash/napari-myelin-quantifier)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-myelin-quantifier)](https://napari-hub.org/plugins/napari-myelin-quantifier)
-[![npe2](https://img.shields.io/badge/plugin-npe2-blue?link=https://napari.org/stable/plugins/index.html)](https://napari.org/stable/plugins/index.html)
-[![Copier](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/copier-org/copier/master/img/badge/badge-grayscale-inverted-border-purple.json)](https://github.com/copier-org/copier)
 
-Myelinated Axon Quantification with Label Tracking
+---
 
-----------------------------------
+## Overview
 
-This [napari] plugin was generated with [copier] using the [napari-plugin-template] (None).
+`napari-myelin-quantifier` is a napari plugin for quantitative analysis of 2D cross-sectional myelinated axons from binary segmentation masks.
 
-<!--
-Don't miss the full getting started guide to set up your new package:
-https://github.com/napari/napari-plugin-template#getting-started
+The plugin identifies individual myelin rings, assigns a unique `ring_id` to each structure, and exports morphometric measurements for downstream analysis.
 
-and review the napari docs for plugin developers:
-https://napari.org/stable/plugins/index.html
--->
+It enables reproducible extraction of:
+
+- Axon diameter
+- Fiber diameter
+- Myelin thickness
+- g-ratio
+
+---
 
 ## Installation
 
-You can install `napari-myelin-quantifier` via [pip]:
+Install via pip:
 
+```bash
+pip install "napari-myelin-quantifier[all]"
 ```
-pip install napari-myelin-quantifier
-```
-
-If napari is not already installed, you can install `napari-myelin-quantifier` with napari and Qt via:
-
-```
+If napari is not installed:
+```bash
 pip install "napari-myelin-quantifier[all]"
 ```
 
-
-To install latest development version :
-
-```
+Development version:
+```bash
 pip install git+https://github.com/wulinteousa2-hash/napari-myelin-quantifier.git
 ```
 
+## Input Requirements
 
+The plugin requires a binary mask layer:
 
-## Contributing
+- Myelin = foreground (1 / True)
+- Background = 0 / False
+- Recommended: clean segmentation without holes or broken rings
 
-Contributions are very welcome. Tests can be run with [tox], please ensure
-the coverage at least stays the same before you submit a pull request.
+Example Binary Mask
 
-## License
+![Binary Mask](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/blob/main/docs/images/1_mask.PNG)
 
-Distributed under the terms of the [MIT] license,
-"napari-myelin-quantifier" is free and open source software
+## Ring Detection and Labeling
 
-## Issues
+Each connected myelin ring is:
 
-If you encounter any problems, please [file an issue] along with a detailed description.
+- Assigned a unique `ring_id`
 
-[napari]: https://github.com/napari/napari
-[copier]: https://copier.readthedocs.io/en/stable/
-[@napari]: https://github.com/napari
-[MIT]: http://opensource.org/licenses/MIT
-[BSD-3]: http://opensource.org/licenses/BSD-3-Clause
-[GNU GPL v3.0]: http://www.gnu.org/licenses/gpl-3.0.txt
-[GNU LGPL v3.0]: http://www.gnu.org/licenses/lgpl-3.0.txt
-[Apache Software License 2.0]: http://www.apache.org/licenses/LICENSE-2.0
-[Mozilla Public License 2.0]: https://www.mozilla.org/media/MPL/2.0/index.txt
-[napari-plugin-template]: https://github.com/napari/napari-plugin-template
+- Spatially localized using centroid coordinates
 
-[file an issue]: https://github.com/wulinteousa2-hash/napari-myelin-quantifier/issues
+- Evaluated for ring topology using Euler characteristic
 
-[napari]: https://github.com/napari/napari
-[tox]: https://tox.readthedocs.io/en/latest/
-[pip]: https://pypi.org/project/pip/
-[PyPI]: https://pypi.org/
+Example Labeled Output
+
+![MultiROI](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/blob/main/docs/images/2_multiROI_connected_components.PNG)
+
+![MultiROI_ring_ID](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/blob/main/docs/images/3_result_labels.PNG)
+
+## Topological Validation (Euler Characteristic)
+
+The Euler number ensures valid ring topology:
+
+- Euler = 0 → valid ring (one hole)
+
+- Euler ≠ 0 → solid object or fragmented structure
+
+This prevents non-myelinated artifacts from being included in analysis.
+
+Topology Illustration
+
+![Euler = 0 and  ≠ 0 ](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/blob/main/docs/images/4_2D_euler_number_0.PNG)
+
+## Quantitative Output (CSV)
+
+For each ring, the plugin exports:
+
+`ring_id`
+
+`centroid_x, centroid_y`
+
+`bbox_x0, bbox_y0, bbox_x1, bbox_y1`
+
+`ring_area_px`
+
+`lumen_area_px`
+
+`filled_area_px`
+
+`euler`
+
+`touches_border`
+
+Example:
+
+```python
+ring_id,centroid_x,centroid_y,bbox_x0,bbox_y0,bbox_x1,bbox_y1,ring_area_px,lumen_area_px,filled_area_px,euler,touches_border
+1,873.8658,34.4421,857,18,890,52,380,556,936,0,False
+```
+
+## Derived Morphometric Parameters
+
+Assuming approximately circular cross-sections:
+
+### Axon diameter:
+```Code
+d_axon = 2 × sqrt(lumen_area / π)
+```
+### Fiber diameter:
+```Code
+d_fiber = 2 × sqrt(filled_area / π)
+```
+### Myelin thickness:
+```Code
+t = (d_fiber − d_axon) / 2
+```
+### g-ratio:
+```Code
+g = d_axon / d_fiber
+```
+Note: These are geometric approximations. For highly irregular axons, area-based statistics may be preferable.
+
+## Typical Workflow
+
+1. Load binary mask into napari.
+
+2. Open:
+- Plugins → Myelin Quantifier
+
+3. Adjust filtering parameters:
+
+- Minimum ring area
+
+- Minimum lumen area
+
+- Exclude border objects (recommended)
+
+4. Run quantification.
+
+5. Export CSV.
+
+6. Perform statistical analysis in Python, R, or Excel.
+
+Interface
+
+![Interface ](https://github.com/wulinteousa2-hash/napari-myelin-quantifier/blob/main/docs/images/interface.PNG)
+
+Contributing
+
+Contributions are welcome. Please ensure tests pass before submitting pull requests.
+
+License
+
+MIT License.
