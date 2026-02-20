@@ -49,16 +49,6 @@ def quantify_myelin_rings_from_mask(
     params: QuantParams,
     euler_keep: Sequence[int] | None = None,
 ) -> tuple[np.ndarray, pd.DataFrame]:
-    """
-    Quantify myelin ring instances from a 2D mask.
-
-    Returns
-    -------
-    inst_keep:
-        int32 label image with ring_id 1..N
-    df:
-        per-instance measurements + spatial info
-    """
     arr = np.asarray(mask_2d)
     if arr.ndim != 2:
         raise ValueError(f"Expected 2D mask. Got shape: {arr.shape}")
@@ -88,17 +78,17 @@ def quantify_myelin_rings_from_mask(
             labels=mask,
         )
         markers = np.zeros(mask.shape, dtype=np.int32)
-        for i, (r, c) in enumerate(coords, start=1):
-            markers[r, c] = i
+        if coords.size > 0:
+            markers[coords[:, 0], coords[:, 1]] = np.arange(
+                1, coords.shape[0] + 1, dtype=np.int32
+            )
     else:
-        # Fast, vectorized expansion (replaces per-label dilation loop)
         if params.seed_dilation > 0:
             markers = segmentation.expand_labels(
                 lumen_labels, distance=int(params.seed_dilation)
             )
         else:
             markers = lumen_labels.astype(np.int32)
-
         markers = (markers * mask.astype(np.int32)).astype(np.int32)
 
     if int(markers.max()) == 0:
@@ -109,71 +99,58 @@ def quantify_myelin_rings_from_mask(
 
     # Watershed instance split
     dist = ndi.distance_transform_edt(mask)
-    inst = segmentation.watershed(-dist, markers=markers, mask=mask).astype(
-        np.int32
-    )
+    inst = segmentation.watershed(-dist, markers=markers, mask=mask).astype(np.int32)
 
-    # Measure + filter + relabel 1..N
     H, W = mask.shape
     props = measure.regionprops(inst)
 
     euler_keep_set = set(euler_keep) if euler_keep is not None else None
 
-    kept = []
+    kept_props = []
     for p in props:
         rid = int(p.label)
         if rid == 0:
             continue
 
-        obj = inst == rid
-        chi = int(
-            measure.euler_number(obj, connectivity=params.euler_connectivity)
-        )
-
         minr, minc, maxr, maxc = p.bbox
-        touches_border = (
-            (minr == 0) or (minc == 0) or (maxr == H) or (maxc == W)
-        )
-
+        touches_border = (minr == 0) or (minc == 0) or (maxr == H) or (maxc == W)
         if params.exclude_border_objects and touches_border:
             continue
+
+        # IMPORTANT: compute on cropped object image (fast), not full HxW mask
+        obj_img = p.image  # boolean array within bbox
+        chi = int(measure.euler_number(obj_img, connectivity=params.euler_connectivity))
         if euler_keep_set is not None and chi not in euler_keep_set:
             continue
 
-        kept.append((rid, float(p.centroid[0]), float(p.centroid[1])))
-
-    kept.sort(key=lambda t: (t[1], t[2]))
-
-    inst_keep = np.zeros_like(inst, dtype=np.int32)
-    for new_id, (old_id, _, _) in enumerate(kept, start=1):
-        inst_keep[inst == old_id] = new_id
-
-    # Build dataframe
-    rows = []
-    props_keep = measure.regionprops(inst_keep)
-
-    for p in props_keep:
-        ring_id = int(p.label)
         cy, cx = p.centroid
+        kept_props.append((rid, float(cy), float(cx), chi, touches_border, p))
+
+    # Sort by centroid (same as your behavior)
+    kept_props.sort(key=lambda t: (t[1], t[2]))
+
+    # Vectorized relabel: LUT remap instead of N full-image comparisons
+    max_id = int(inst.max())
+    lut = np.zeros(max_id + 1, dtype=np.int32)
+    for new_id, (old_id, *_rest) in enumerate(kept_props, start=1):
+        lut[old_id] = np.int32(new_id)
+
+    inst_keep = lut[inst]  # one pass over the image
+
+    # Build dataframe without re-running regionprops and without full-image masks
+    rows = []
+    for new_id, (old_id, cy, cx, chi, touches_border, p) in enumerate(kept_props, start=1):
         minr, minc, maxr, maxc = p.bbox
-
-        obj = inst_keep == ring_id
-        chi = int(
-            measure.euler_number(obj, connectivity=params.euler_connectivity)
-        )
-
-        touches_border = (
-            (minr == 0) or (minc == 0) or (maxr == H) or (maxc == W)
-        )
 
         ring_area_px = int(p.area)
 
-        obj_filled = ndi.binary_fill_holes(obj)
+        # Fill holes on cropped image (fast)
+        obj_filled = ndi.binary_fill_holes(p.image)
         filled_area_px = int(obj_filled.sum())
         lumen_area_px = int(filled_area_px - ring_area_px)
 
         row = {
-            "ring_id": ring_id,
+            "ring_id": int(new_id),
             "centroid_x": float(cx),
             "centroid_y": float(cy),
             "bbox_x0": int(minc),
@@ -183,7 +160,7 @@ def quantify_myelin_rings_from_mask(
             "ring_area_px": ring_area_px,
             "lumen_area_px": lumen_area_px,
             "filled_area_px": filled_area_px,
-            "euler": chi,
+            "euler": int(chi),
             "touches_border": bool(touches_border),
         }
 
