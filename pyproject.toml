@@ -1,6 +1,6 @@
 [project]
 name = "napari-myelin-quantifier"
-version = "0.3.1"
+version = "1.0.0"
 description = "Myelinated Axon Quantification with Label Tracking"
 readme = "README.md"
 license = {file = "LICENSE"}
