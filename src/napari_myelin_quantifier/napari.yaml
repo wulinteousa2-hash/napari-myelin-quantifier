@@ -5,14 +5,23 @@ visibility: public
 contributions:
   commands:
     - id: napari-myelin-quantifier.myelin_quantifier_widget
+      title: Myelin Quantifier (Quantify Rings)
       python_name: napari_myelin_quantifier._widget:myelin_quantifier_widget
-      title: Myelin Quantifier (Axon Counter)
+
+    - id: napari-myelin-quantifier.myelin_quantifier_dashboard
+      title: Myelin Quantifier (Dashboard)
+      python_name: napari_myelin_quantifier._widget:myelin_locator_dashboard
 
   widgets:
     - command: napari-myelin-quantifier.myelin_quantifier_widget
-      display_name: Myelin Quantifier
+      display_name: Myelin Quantifier (Quantify Rings)
+
+    - command: napari-myelin-quantifier.myelin_quantifier_dashboard
+      display_name: Myelin Quantifier (Dashboard)
 
   menus:
     napari/plugins:
       - command: napari-myelin-quantifier.myelin_quantifier_widget
-        when: always
+        when: "True"
+      - command: napari-myelin-quantifier.myelin_quantifier_dashboard
+        when: "True"

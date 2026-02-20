@@ -84,3 +84,6 @@ venv/
 **/_version.py
 
 *.csv
+
+# local scratch
+_dev_notes/

@@ -1,8 +1,4 @@
 try:
     from ._version import version as __version__
-except ImportError:
+except (ImportError, ModuleNotFoundError, AttributeError):
     __version__ = "unknown"
-
-from ._widget import myelin_quantifier_widget
-
-__all__ = ["myelin_quantifier_widget"]
