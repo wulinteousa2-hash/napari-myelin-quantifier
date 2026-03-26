@@ -41,11 +41,32 @@ pip install git+https://github.com/wulinteousa2-hash/napari-myelin-quantifier.gi
 
 ## Input Requirements
 
-The plugin requires a binary mask layer:
+The plugin accepts either:
 
-- Myelin = foreground (1 / True)
+- A 2D binary mask layer
+
+Expected mask semantics:
+
+- Myelin = foreground (non-zero / True)
 - Background = 0 / False
 - Recommended: clean segmentation without holes or broken rings
+
+If your mask is stored as RGB/RGBA or grayscale, use the optional Quick Mask Prep
+section in the quantify panel to convert it into a binary mask first.
+
+## Quick Mask Prep (Optional)
+
+This helper is intended for users who already have a segmented mask, but the
+file is stored as RGB/RGBA or grayscale instead of a clean binary mask.
+
+Available quick actions:
+
+- `1-Channel` → create a single-channel image layer
+- `Invert` → create an inverted single-channel image layer
+- `Binary (Otsu)` → convert the selected layer into a binary Labels layer
+
+The prepared binary layer is automatically selected in the quantifier `mask layer`
+field so you can run quantification immediately.
 
 Example Binary Mask
 
@@ -134,12 +155,14 @@ Note: These are geometric approximations. For highly irregular axons, area-based
 
 ## Typical Workflow
 
-1. Load binary mask into napari.
+1. Load your mask into napari.
 
-2. Open:
-- Plugins → Myelin Quantifier
+2. If needed, use `Quick Mask Prep` to convert RGB/RGBA or grayscale mask images into a binary mask.
 
-3. Adjust filtering parameters:
+3. Open:
+- Plugins → Myelin Rings: Quantify
+
+4. Adjust filtering parameters:
 
 - Minimum ring area
 
@@ -147,11 +170,13 @@ Note: These are geometric approximations. For highly irregular axons, area-based
 
 - Exclude border objects (recommended)
 
-4. Run quantification.
+5. Run quantification.
 
-5. Export CSV.
+6. Optional: open Plugins → Myelin Rings: Locate by ID to jump to a specific `ring_id`.
 
-6. Perform statistical analysis in Python, R, or Excel.
+7. Export CSV.
+
+8. Perform statistical analysis in Python, R, or Excel.
 
 Interface
 

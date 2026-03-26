@@ -5,19 +5,19 @@ visibility: public
 contributions:
   commands:
     - id: napari-myelin-quantifier.myelin_quantifier_widget
-      title: Myelin Quantifier (Quantify Rings)
+      title: "Myelin Rings: Quantify"
       python_name: napari_myelin_quantifier._widget:myelin_quantifier_widget
 
     - id: napari-myelin-quantifier.myelin_quantifier_dashboard
-      title: Myelin Quantifier (Dashboard)
+      title: "Myelin Rings: Locate by ID"
       python_name: napari_myelin_quantifier._widget:myelin_locator_dashboard
 
   widgets:
     - command: napari-myelin-quantifier.myelin_quantifier_widget
-      display_name: Myelin Quantifier (Quantify Rings)
+      display_name: "Myelin Rings: Quantify"
 
     - command: napari-myelin-quantifier.myelin_quantifier_dashboard
-      display_name: Myelin Quantifier (Dashboard)
+      display_name: "Myelin Rings: Locate by ID"
 
   menus:
     napari/plugins:
