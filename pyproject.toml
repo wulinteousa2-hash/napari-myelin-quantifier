@@ -5,7 +5,7 @@ description = "Myelinated Axon Quantification with Label Tracking"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [
-  {name = "Napari User"},
+  {name = "Wulin Teo"},
   {email = "wulinteo.usa2@gmail.com"},
 ]
 classifiers = [
