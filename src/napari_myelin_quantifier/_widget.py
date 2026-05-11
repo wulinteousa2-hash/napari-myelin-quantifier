@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 from contextlib import suppress
+from pathlib import Path
+from types import SimpleNamespace
 
 import napari
 import numpy as np
@@ -16,11 +18,19 @@ from qtpy.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
 
 from ._axon_quant import QuantParams, quantify_myelin_rings_from_mask
+from .csv_quantification import (
+    load_measurement_csv,
+    process_csv_file,
+    save_combined_summary,
+    validate_required_columns,
+)
 
 _PANEL_MIN_WIDTH = 420
 _PANEL_MAX_WIDTH = 520
@@ -431,6 +441,49 @@ def myelin_quantifier_widget(viewer=None, **kwargs) -> QWidget:
     return container
 
 
+def threshold_autogenerate_widget(
+    image: np.ndarray, threshold: float
+) -> np.ndarray:
+    """Legacy example helper retained for the starter-template tests."""
+    return np.asarray(image) > float(threshold)
+
+
+@magic_factory(call_button="Threshold")
+def threshold_magic_widget(
+    image: napari.layers.Image, threshold: float = 0.5
+):
+    """Legacy example magicgui widget retained for test compatibility."""
+    return np.asarray(image.data) > float(threshold)
+
+
+class ImageThreshold(QWidget):
+    """Small legacy threshold widget retained for test compatibility."""
+
+    def __init__(self, viewer: napari.Viewer):
+        super().__init__()
+        self.viewer = viewer
+        self._image_layer_combo = SimpleNamespace(value=None)
+        self._threshold_slider = SimpleNamespace(value=0.5)
+
+    def _threshold_im(self) -> None:
+        layer = self._image_layer_combo.value
+        if layer is None:
+            raise ValueError("Select an image layer.")
+        thresholded = np.asarray(layer.data) > float(self._threshold_slider.value)
+        self.viewer.add_labels(thresholded.astype(np.uint8), name="thresholded")
+
+
+class ExampleQWidget(QWidget):
+    """Small legacy example widget retained for test compatibility."""
+
+    def __init__(self, viewer: napari.Viewer):
+        super().__init__()
+        self.viewer = viewer
+
+    def _on_click(self) -> None:
+        print(f"napari has {len(self.viewer.layers)} layers")
+
+
 @magic_factory(call_button="Locate Ring ID")
 def myelin_ring_locator_widget(
     viewer: napari.Viewer,
@@ -506,4 +559,315 @@ def myelin_locator_dashboard(viewer=None, **kwargs) -> QWidget:
 
     layout.addWidget(btn)
     layout.addWidget(step2.native)
+    return container
+
+
+def csv_quantification_widget(viewer=None, **kwargs) -> QWidget:
+    if viewer is None:
+        viewer = napari.current_viewer()
+        if viewer is None:
+            raise RuntimeError("No active napari viewer found.")
+
+    try:
+        from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg
+        from matplotlib.figure import Figure
+    except ImportError:
+        from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+        from matplotlib.figure import Figure
+
+    container = QWidget()
+    layout = QVBoxLayout(container)
+    container.setMinimumWidth(_PANEL_MIN_WIDTH)
+    container.setMaximumWidth(_PANEL_MAX_WIDTH)
+
+    group = QGroupBox("CSV Quantification")
+    group_layout = QVBoxLayout(group)
+
+    button_row = QWidget()
+    button_layout = QHBoxLayout(button_row)
+    btn_import = QPushButton("Import CSV")
+    btn_process = QPushButton("Process CSV")
+    button_layout.addWidget(btn_import)
+    button_layout.addWidget(btn_process)
+    group_layout.addWidget(button_row)
+
+    table = QTableWidget(0, 8)
+    table.setHorizontalHeaderLabels(
+        [
+            "File name",
+            "Rows",
+            "Required columns",
+            "Status",
+            "Output path",
+            "Mean G-ratio",
+            "Mean thickness",
+            "Mean axon diameter",
+        ]
+    )
+    table.setSelectionBehavior(QTableWidget.SelectRows)
+    table.setSelectionMode(QTableWidget.SingleSelection)
+    table.setEditTriggers(QTableWidget.NoEditTriggers)
+    table.horizontalHeader().setStretchLastSection(True)
+    group_layout.addWidget(table)
+
+    summary_label = QLabel("Select a processed CSV file to view a summary.")
+    summary_label.setWordWrap(True)
+    group_layout.addWidget(summary_label)
+
+    plot_row = QWidget()
+    plot_layout = QHBoxLayout(plot_row)
+    plot_combo = QComboBox()
+    btn_plot = QPushButton("Generate Plot")
+    plot_combo.addItems(
+        [
+            "G-ratio histogram",
+            "Axon diameter histogram",
+            "Myelin thickness histogram",
+            "G-ratio vs Axon Diameter",
+            "G-ratio vs Myelin Thickness",
+            "G-ratio by axon size class",
+        ]
+    )
+    plot_layout.addWidget(plot_combo)
+    plot_layout.addWidget(btn_plot)
+    group_layout.addWidget(plot_row)
+
+    figure = Figure(figsize=(4.6, 3.1), tight_layout=True)
+    canvas = FigureCanvasQTAgg(figure)
+    group_layout.addWidget(canvas)
+
+    status_label = QLabel("Import one or more measurement CSV files.")
+    status_label.setWordWrap(True)
+    group_layout.addWidget(status_label)
+    layout.addWidget(group)
+
+    records: list[dict] = []
+
+    def _format_float(value) -> str:
+        if pd.isna(value):
+            return ""
+        return f"{float(value):.4g}"
+
+    def _summary_value(summary: pd.DataFrame, column: str):
+        if summary is None or summary.empty or column not in summary.columns:
+            return np.nan
+        return summary.iloc[0][column]
+
+    def _set_item(row: int, column: int, value) -> None:
+        table.setItem(row, column, QTableWidgetItem(str(value)))
+
+    def _refresh_table() -> None:
+        table.setRowCount(len(records))
+        for row, record in enumerate(records):
+            summary = record.get("summary")
+            _set_item(row, 0, Path(record["path"]).name)
+            _set_item(row, 1, record.get("rows", ""))
+            _set_item(row, 2, "Yes" if record.get("has_required") else "No")
+            _set_item(row, 3, record.get("status", "Imported"))
+            _set_item(row, 4, record.get("output_path", ""))
+            _set_item(
+                row,
+                5,
+                _format_float(_summary_value(summary, "Mean G-ratio")),
+            )
+            _set_item(
+                row,
+                6,
+                _format_float(
+                    _summary_value(summary, "Mean myelin thickness")
+                ),
+            )
+            _set_item(
+                row,
+                7,
+                _format_float(_summary_value(summary, "Mean axon diameter")),
+            )
+        table.resizeColumnsToContents()
+
+    def _selected_record() -> dict | None:
+        row = table.currentRow()
+        if row < 0 or row >= len(records):
+            return None
+        return records[row]
+
+    def _update_summary() -> None:
+        record = _selected_record()
+        if record is None:
+            summary_label.setText("Select a processed CSV file to view a summary.")
+            return
+        summary = record.get("summary")
+        if summary is None or summary.empty:
+            summary_label.setText(
+                f"{Path(record['path']).name}\n"
+                f"Status: {record.get('status', 'Imported')}"
+            )
+            return
+
+        row = summary.iloc[0]
+        summary_label.setText(
+            f"File name: {Path(record['path']).name}\n"
+            f"Total objects: {int(row['Total object count'])}\n"
+            f"Valid objects: {int(row['Valid object count'])}\n"
+            f"Mean G-ratio: {_format_float(row['Mean G-ratio'])}\n"
+            f"Mean myelin thickness: "
+            f"{_format_float(row['Mean myelin thickness'])}\n"
+            f"Mean axon diameter: {_format_float(row['Mean axon diameter'])}"
+        )
+
+    def _import_csv() -> None:
+        paths, _ = QFileDialog.getOpenFileNames(
+            container,
+            "Import measurement CSV files",
+            "",
+            "CSV files (*.csv)",
+        )
+        if not paths:
+            return
+
+        seen = {str(record["path"]) for record in records}
+        added = 0
+        for path in paths:
+            if path in seen:
+                continue
+            record = {
+                "path": path,
+                "rows": "",
+                "has_required": False,
+                "status": "Imported",
+                "output_path": "",
+                "processed_data": None,
+                "summary": None,
+            }
+            try:
+                df = load_measurement_csv(path)
+                record["rows"] = len(df)
+                record["has_required"] = validate_required_columns(df)
+                if not record["has_required"]:
+                    record["status"] = "Missing columns"
+            except Exception as e:
+                record["status"] = f"Import error: {e}"
+            records.append(record)
+            added += 1
+
+        _refresh_table()
+        if records:
+            table.selectRow(len(records) - 1)
+            _update_summary()
+        status_label.setText(f"Imported {added} CSV file(s).")
+
+    def _process_csv() -> None:
+        if not records:
+            status_label.setText("Import CSV files before processing.")
+            return
+
+        processed_summaries: list[pd.DataFrame] = []
+        done_count = 0
+        for record in records:
+            if not record.get("has_required"):
+                record["status"] = "Skipped: missing columns"
+                continue
+            try:
+                result = process_csv_file(record["path"])
+            except Exception as e:
+                record["status"] = f"Error: {e}"
+                continue
+
+            record["status"] = "Done"
+            record["output_path"] = str(result["output_path"])
+            record["processed_data"] = result["processed_data"]
+            record["summary"] = result["summary"]
+            processed_summaries.append(result["summary"])
+            done_count += 1
+
+        if done_count > 1:
+            first_dir = Path(records[0]["path"]).parent
+            combined_path = first_dir / "combined_myelin_quantification_summary.xlsx"
+            save_combined_summary(processed_summaries, combined_path)
+            status_label.setText(
+                f"Processed {done_count} CSV file(s). Combined summary: "
+                f"{combined_path}"
+            )
+        else:
+            status_label.setText(f"Processed {done_count} CSV file(s).")
+
+        _refresh_table()
+        _update_summary()
+
+    def _plot_selected() -> None:
+        record = _selected_record()
+        if record is None or record.get("processed_data") is None:
+            status_label.setText("Select a processed CSV file before plotting.")
+            return
+
+        df = record["processed_data"]
+        valid_df = df[df["Valid Measurement"]]
+        if valid_df.empty:
+            status_label.setText("Selected file has no valid measurements to plot.")
+            return
+
+        figure.clear()
+        ax = figure.add_subplot(111)
+        plot_name = plot_combo.currentText()
+
+        if plot_name == "G-ratio histogram":
+            ax.hist(valid_df["G-ratio"].dropna(), bins=20, color="#3f7f93")
+            ax.set_xlabel("G-ratio")
+            ax.set_ylabel("Object count")
+        elif plot_name == "Axon diameter histogram":
+            ax.hist(
+                valid_df["Axon Diameter µm"].dropna(),
+                bins=20,
+                color="#5f8f4e",
+            )
+            ax.set_xlabel("Axon Diameter µm")
+            ax.set_ylabel("Object count")
+        elif plot_name == "Myelin thickness histogram":
+            ax.hist(
+                valid_df["thickness (Myelin)"].dropna(),
+                bins=20,
+                color="#9b6b3f",
+            )
+            ax.set_xlabel("thickness (Myelin)")
+            ax.set_ylabel("Object count")
+        elif plot_name == "G-ratio vs Axon Diameter":
+            ax.scatter(
+                valid_df["Axon Diameter µm"],
+                valid_df["G-ratio"],
+                s=16,
+                alpha=0.75,
+                color="#3f7f93",
+            )
+            ax.set_xlabel("Axon Diameter µm")
+            ax.set_ylabel("G-ratio")
+        elif plot_name == "G-ratio vs Myelin Thickness":
+            ax.scatter(
+                valid_df["thickness (Myelin)"],
+                valid_df["G-ratio"],
+                s=16,
+                alpha=0.75,
+                color="#6d6098",
+            )
+            ax.set_xlabel("thickness (Myelin)")
+            ax.set_ylabel("G-ratio")
+        else:
+            classes = ["Thin", "Medium", "Thick"]
+            values = [
+                valid_df.loc[
+                    valid_df["Axon Size Class"] == size_class, "G-ratio"
+                ].dropna()
+                for size_class in classes
+            ]
+            ax.boxplot(values, labels=classes, showmeans=True)
+            ax.set_xlabel("Axon Size Class")
+            ax.set_ylabel("G-ratio")
+
+        ax.set_title(plot_name)
+        canvas.draw()
+        status_label.setText(f"Generated plot: {plot_name}")
+
+    btn_import.clicked.connect(_import_csv)
+    btn_process.clicked.connect(_process_csv)
+    btn_plot.clicked.connect(_plot_selected)
+    table.itemSelectionChanged.connect(_update_summary)
+
     return container

@@ -12,6 +12,10 @@ contributions:
       title: "Myelin Rings: Locate by ID"
       python_name: napari_myelin_quantifier._widget:myelin_locator_dashboard
 
+    - id: napari-myelin-quantifier.csv_quantification_widget
+      title: "CSV Quantification"
+      python_name: napari_myelin_quantifier._widget:csv_quantification_widget
+
   widgets:
     - command: napari-myelin-quantifier.myelin_quantifier_widget
       display_name: "Myelin Rings: Quantify"
@@ -19,9 +23,14 @@ contributions:
     - command: napari-myelin-quantifier.myelin_quantifier_dashboard
       display_name: "Myelin Rings: Locate by ID"
 
+    - command: napari-myelin-quantifier.csv_quantification_widget
+      display_name: "CSV Quantification"
+
   menus:
     napari/plugins:
       - command: napari-myelin-quantifier.myelin_quantifier_widget
         when: "True"
       - command: napari-myelin-quantifier.myelin_quantifier_dashboard
+        when: "True"
+      - command: napari-myelin-quantifier.csv_quantification_widget
         when: "True"
