@@ -10,7 +10,7 @@
 - Detect and quantify myelin rings from binary mask layers in napari.
 - Import raw label/object measurement CSV files and calculate myelin morphometric features into Excel workbooks.
 
-Current version: `1.2.0`
+Current version: `1.2.1`
 
 ## Installation
 
