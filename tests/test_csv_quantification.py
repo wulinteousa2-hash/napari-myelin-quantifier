@@ -5,7 +5,9 @@ from napari_myelin_quantifier.csv_quantification import (
     AREA_COLUMN,
     FILLED_AREA_COLUMN,
     MASK_AREA_COLUMN,
+    MASK_AREA_PX_COLUMN,
     MASK_FILLED_AREA_COLUMN,
+    MASK_FILLED_AREA_PX_COLUMN,
     calculate_myelin_features,
     load_measurement_csv,
     process_csv_file,
@@ -40,6 +42,18 @@ def test_mask_area_columns_are_detected():
             "ring_id": [1, 2],
             MASK_AREA_COLUMN: [3.0, 4.0],
             MASK_FILLED_AREA_COLUMN: [12.0, 20.0],
+        }
+    )
+
+    assert validate_required_columns(df)
+
+
+def test_mask_pixel_area_columns_are_detected():
+    df = pd.DataFrame(
+        {
+            "ring_id": [1, 2],
+            MASK_AREA_PX_COLUMN: [1685, 1435],
+            MASK_FILLED_AREA_PX_COLUMN: [2010, 2667],
         }
     )
 
@@ -103,6 +117,29 @@ def test_mask_area_columns_are_used_for_calculations():
     )
     np.testing.assert_allclose(
         processed["AxonArea"], df[MASK_FILLED_AREA_COLUMN] - df[MASK_AREA_COLUMN]
+    )
+
+
+def test_mask_pixel_area_columns_are_used_for_calculations():
+    df = pd.DataFrame(
+        {
+            "ring_id": [1, 2],
+            MASK_AREA_PX_COLUMN: [1685, 1435],
+            MASK_FILLED_AREA_PX_COLUMN: [2010, 2667],
+        }
+    )
+
+    processed = calculate_myelin_features(df)
+
+    assert AREA_COLUMN in processed.columns
+    assert FILLED_AREA_COLUMN in processed.columns
+    np.testing.assert_allclose(processed[AREA_COLUMN], df[MASK_AREA_PX_COLUMN])
+    np.testing.assert_allclose(
+        processed[FILLED_AREA_COLUMN], df[MASK_FILLED_AREA_PX_COLUMN]
+    )
+    np.testing.assert_allclose(
+        processed["AxonArea"],
+        df[MASK_FILLED_AREA_PX_COLUMN] - df[MASK_AREA_PX_COLUMN],
     )
 
 

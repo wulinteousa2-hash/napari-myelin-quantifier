@@ -137,7 +137,12 @@ or:
 - `ring_area_um2`
 - `filled_area_um2`
 
-Mask CSV files must be exported with pixel size set so the micrometer-squared area columns are present. When mask area columns are used, the CSV workflow copies them into the standard `2D Area (µm²)` and `2D Filled Area (µm²)` columns before calculating features.
+or a mask export without pixel size:
+
+- `ring_area_px`
+- `filled_area_px`
+
+When mask area columns are used, the CSV workflow copies them into the standard `2D Area (µm²)` and `2D Filled Area (µm²)` columns before calculating features. If micrometer-squared and pixel-area mask columns are both present, the calibrated micrometer-squared columns are preferred.
 
 Other columns, such as `Time Step`, `Label Index`, `Name (NA)`, and `2D Euler Number`, are preserved in the processed output.
 
