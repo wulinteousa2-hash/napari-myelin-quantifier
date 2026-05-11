@@ -127,10 +127,17 @@ Use `CSV Quantification` when you already have raw object measurement CSV files 
 
 The importer supports common CSV variants, including comma-delimited files and semicolon-delimited UTF-8 files with a byte-order mark.
 
-Required input columns:
+Required input columns, using either naming format:
 
 - `2D Area (µm²)`
 - `2D Filled Area (µm²)`
+
+or:
+
+- `ring_area_um2`
+- `filled_area_um2`
+
+Mask CSV files must be exported with pixel size set so the micrometer-squared area columns are present. When mask area columns are used, the CSV workflow copies them into the standard `2D Area (µm²)` and `2D Filled Area (µm²)` columns before calculating features.
 
 Other columns, such as `Time Step`, `Label Index`, `Name (NA)`, and `2D Euler Number`, are preserved in the processed output.
 

@@ -9,6 +9,12 @@ import pandas as pd
 AREA_COLUMN = "2D Area (µm²)"
 FILLED_AREA_COLUMN = "2D Filled Area (µm²)"
 REQUIRED_COLUMNS = (AREA_COLUMN, FILLED_AREA_COLUMN)
+MASK_AREA_COLUMN = "ring_area_um2"
+MASK_FILLED_AREA_COLUMN = "filled_area_um2"
+AREA_COLUMN_ALIASES = {
+    AREA_COLUMN: (AREA_COLUMN, MASK_AREA_COLUMN),
+    FILLED_AREA_COLUMN: (FILLED_AREA_COLUMN, MASK_FILLED_AREA_COLUMN),
+}
 
 CALCULATED_COLUMNS = (
     "MyelinatedArea",
@@ -33,12 +39,33 @@ def load_measurement_csv(path: str | Path) -> pd.DataFrame:
 
 def validate_required_columns(df: pd.DataFrame) -> bool:
     """Return True when all columns required for CSV quantification exist."""
-    return all(column in df.columns for column in REQUIRED_COLUMNS)
+    return all(
+        any(alias in df.columns for alias in AREA_COLUMN_ALIASES[column])
+        for column in REQUIRED_COLUMNS
+    )
 
 
 def missing_required_columns(df: pd.DataFrame) -> list[str]:
     """Return required input columns not present in the dataframe."""
-    return [column for column in REQUIRED_COLUMNS if column not in df.columns]
+    missing = []
+    for column in REQUIRED_COLUMNS:
+        aliases = AREA_COLUMN_ALIASES[column]
+        if not any(alias in df.columns for alias in aliases):
+            missing.append(" or ".join(aliases))
+    return missing
+
+
+def normalize_measurement_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Add canonical measurement columns when compatible aliases are present."""
+    result = df.copy()
+    for column in REQUIRED_COLUMNS:
+        if column in result.columns:
+            continue
+        for alias in AREA_COLUMN_ALIASES[column]:
+            if alias in result.columns:
+                result[column] = result[alias]
+                break
+    return result
 
 
 def _validity_notes(
@@ -95,7 +122,7 @@ def calculate_myelin_features(df: pd.DataFrame) -> pd.DataFrame:
         missing = ", ".join(missing_required_columns(df))
         raise ValueError(f"Missing required column(s): {missing}")
 
-    result = df.copy()
+    result = normalize_measurement_columns(df)
     ring_area = pd.to_numeric(result[AREA_COLUMN], errors="coerce")
     filled_area = pd.to_numeric(result[FILLED_AREA_COLUMN], errors="coerce")
 

@@ -84,6 +84,8 @@ venv/
 **/_version.py
 
 *.csv
+.~lock.*#
+calculated_*.xlsx
 
 # local scratch
 _dev_notes/
