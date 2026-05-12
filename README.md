@@ -5,12 +5,15 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-myelin-quantifier.svg?color=green)](https://python.org)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-myelin-quantifier)](https://napari-hub.org/plugins/napari-myelin-quantifier)
 
-`napari-myelin-quantifier` is a napari plugin for 2D myelinated axon analysis. It supports two related workflows:
+`napari-myelin-quantifier` is a napari plugin for 2D myelinated axon analysis. It supports three related workflows:
 
 - Detect and quantify myelin rings from binary mask layers in napari.
 - Import raw label/object measurement CSV files and calculate myelin morphometric features into Excel workbooks.
+- Build study-level analyses from raw CSV or calculated Excel files, compare blinded/final groups, and export combined study results.
 
 Current version: `1.2.1`
+
+Version `1.2.1` adds study-level CSV/Excel analysis, filename-based sample IDs for blinded files such as `119.csv`, resumable imports from `calculated_*.xlsx`, direct two- or three-way comparison plots, PCA/k-means, and user-selected output folders.
 
 ## Installation
 
@@ -34,11 +37,12 @@ pip install git+https://github.com/wulinteousa2-hash/napari-myelin-quantifier.gi
 
 ## Plugin Panels
 
-The plugin contributes three napari widgets:
+The plugin contributes four napari widgets:
 
 - `Myelin Rings: Quantify`
 - `Myelin Rings: Locate by ID`
 - `CSV Quantification`
+- `CSV Study Analysis`
 
 Open them from the napari menu:
 
@@ -241,6 +245,67 @@ The CSV panel can generate:
 - G-ratio vs axon diameter scatter plot
 - G-ratio vs myelin thickness scatter plot
 - G-ratio by axon size class boxplot
+
+## CSV Study Analysis Workflow
+
+Use `CSV Study Analysis` when you want to compare multiple samples, assign blind and final group labels, resume from calculated Excel files, make group plots, run PCA/k-means, or export one study workbook.
+
+Supported inputs:
+
+- raw measurement `.csv` files
+- processed `calculated_*.xlsx` workbooks from this plugin
+- compatible Excel workbooks containing a `Processed_Data` sheet with calculated columns
+
+This means you can reopen a study later by importing the already calculated Excel files instead of processing raw CSV files again.
+
+### Study Setup
+
+1. Open `Plugins -> Myelin Quantifier -> CSV Study Analysis`.
+2. Click `Import CSV / Excel`.
+3. Select raw CSV files, calculated Excel files, or a mix of both.
+4. Optionally click `Set Output Folder` to choose where newly calculated Excel files and study exports should be saved.
+5. Review or edit sample metadata in the import table:
+   - `Sample ID`
+   - `Animal ID`
+   - `Image ID`
+   - `Blind Group`
+   - `Final Group`
+6. Use the `Include` checkbox to control which samples enter summaries, plots, PCA, and exports.
+7. Click `Process Selected` or `Process All`.
+
+Calculated Excel files are loaded as already processed samples. Raw CSV files are processed into `calculated_<name>.xlsx` in the selected output folder, or next to the source CSV if no output folder is set.
+
+By default, `Sample ID` is taken from the filename so existing blinded sample codes are preserved. For example, `119.csv` becomes `119`, `S119.csv` becomes `S119`, and `calculated_119.xlsx` becomes `119`. Enable `Prefix numeric IDs with S` if you prefer numeric filenames such as `119.csv` to display as `S119`.
+
+### Traditional Comparisons
+
+The `Compare` tab is for direct two- or three-way comparisons without PCA.
+
+You can compare by:
+
+- `Sample ID`
+- `Blind Group`
+- `Final Group`
+
+Choose comparison values A, B, and optionally C, then generate:
+
+- overlay histograms
+- boxplots
+- G-ratio vs axon diameter scatter overlays
+- G-ratio vs myelin thickness scatter overlays
+
+This is intended for straightforward subject-vs-subject, blind-group, or final-group comparisons with overlapping plots.
+
+### Study Outputs
+
+The `Export` tab can write:
+
+- full study workbook
+- combined object-level CSV
+- sample-level summary CSV
+- PCA/cluster results CSV
+
+The study workbook contains object-level data, sample-level summaries, PCA/cluster results when available, and analysis metadata.
 
 ## Typical Mask Workflow
 

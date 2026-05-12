@@ -36,11 +36,40 @@ CALCULATED_COLUMNS = (
 )
 
 
+def has_calculated_columns(df: pd.DataFrame) -> bool:
+    """Return True when a dataframe already has the processed output columns."""
+    return all(column in df.columns for column in CALCULATED_COLUMNS)
+
+
 def load_measurement_csv(path: str | Path) -> pd.DataFrame:
     """Load a label/object measurement CSV file."""
     df = pd.read_csv(path, sep=None, engine="python", encoding="utf-8-sig")
     df.columns = df.columns.str.strip().str.removeprefix("\ufeff")
     return df
+
+
+def load_processed_excel(path: str | Path) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Load a previously calculated Excel workbook."""
+    path = Path(path)
+    sheets = pd.read_excel(path, sheet_name=None)
+    if "Processed_Data" not in sheets:
+        raise ValueError("Excel workbook must contain a 'Processed_Data' sheet.")
+
+    processed = sheets["Processed_Data"]
+    processed.columns = processed.columns.astype(str).str.strip().str.removeprefix("\ufeff")
+    if not has_calculated_columns(processed):
+        missing = [column for column in CALCULATED_COLUMNS if column not in processed.columns]
+        raise ValueError(
+            "Processed_Data sheet is missing calculated column(s): "
+            + ", ".join(missing)
+        )
+
+    summary = sheets.get("Summary")
+    if summary is None or summary.empty:
+        summary = summarize_myelin_features(processed, path.name)
+    else:
+        summary.columns = summary.columns.astype(str).str.strip().str.removeprefix("\ufeff")
+    return processed, summary
 
 
 def validate_required_columns(df: pd.DataFrame) -> bool:
@@ -205,20 +234,23 @@ def save_processed_excel(
     return output_path
 
 
-def processed_output_path(path: str | Path) -> Path:
+def processed_output_path(path: str | Path, output_dir: str | Path | None = None) -> Path:
     """Return calculated_<stem>.xlsx next to the source CSV."""
     source = Path(path)
-    return source.with_name(f"calculated_{source.stem}.xlsx")
+    parent = Path(output_dir) if output_dir else source.parent
+    return parent / f"calculated_{source.stem}.xlsx"
 
 
-def process_csv_file(path: str | Path) -> dict[str, Any]:
+def process_csv_file(
+    path: str | Path, output_dir: str | Path | None = None
+) -> dict[str, Any]:
     """Process one measurement CSV and write its Excel output."""
     source = Path(path)
     df = load_measurement_csv(source)
     processed = calculate_myelin_features(df)
     summary = summarize_myelin_features(processed, source.name)
     output_path = save_processed_excel(
-        processed, summary, processed_output_path(source)
+        processed, summary, processed_output_path(source, output_dir=output_dir)
     )
     return {
         "source_path": source,
@@ -228,9 +260,11 @@ def process_csv_file(path: str | Path) -> dict[str, Any]:
     }
 
 
-def process_multiple_csv_files(paths: list[str | Path]) -> list[dict[str, Any]]:
+def process_multiple_csv_files(
+    paths: list[str | Path], output_dir: str | Path | None = None
+) -> list[dict[str, Any]]:
     """Process multiple measurement CSV files."""
-    return [process_csv_file(path) for path in paths]
+    return [process_csv_file(path, output_dir=output_dir) for path in paths]
 
 
 def save_combined_summary(

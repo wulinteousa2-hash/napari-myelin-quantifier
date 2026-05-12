@@ -16,6 +16,10 @@ contributions:
       title: "CSV Quantification"
       python_name: napari_myelin_quantifier._widget:csv_quantification_widget
 
+    - id: napari-myelin-quantifier.csv_study_analysis_widget
+      title: "CSV Study Analysis"
+      python_name: napari_myelin_quantifier._widget:csv_study_analysis_widget
+
   widgets:
     - command: napari-myelin-quantifier.myelin_quantifier_widget
       display_name: "Myelin Rings: Quantify"
@@ -26,6 +30,9 @@ contributions:
     - command: napari-myelin-quantifier.csv_quantification_widget
       display_name: "CSV Quantification"
 
+    - command: napari-myelin-quantifier.csv_study_analysis_widget
+      display_name: "CSV Study Analysis"
+
   menus:
     napari/plugins:
       - command: napari-myelin-quantifier.myelin_quantifier_widget
@@ -33,4 +40,6 @@ contributions:
       - command: napari-myelin-quantifier.myelin_quantifier_dashboard
         when: "True"
       - command: napari-myelin-quantifier.csv_quantification_widget
+        when: "True"
+      - command: napari-myelin-quantifier.csv_study_analysis_widget
         when: "True"

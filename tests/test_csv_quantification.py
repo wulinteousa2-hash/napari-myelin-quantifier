@@ -9,6 +9,7 @@ from napari_myelin_quantifier.csv_quantification import (
     MASK_FILLED_AREA_COLUMN,
     MASK_FILLED_AREA_PX_COLUMN,
     calculate_myelin_features,
+    load_processed_excel,
     load_measurement_csv,
     process_csv_file,
     save_processed_excel,
@@ -167,6 +168,19 @@ def test_excel_output_is_created(tmp_path):
     assert output_path.exists()
     sheets = pd.read_excel(output_path, sheet_name=None)
     assert set(sheets) == {"Processed_Data", "Summary"}
+
+
+def test_processed_excel_can_be_loaded_without_reprocessing(tmp_path):
+    processed = calculate_myelin_features(_measurement_df())
+    summary = summarize_myelin_features(processed, "measurements.csv")
+    output_path = tmp_path / "calculated_measurements.xlsx"
+    save_processed_excel(processed, summary, output_path)
+
+    loaded_processed, loaded_summary = load_processed_excel(output_path)
+
+    assert "G-ratio" in loaded_processed.columns
+    assert "Axon Diameter µm" in loaded_processed.columns
+    assert loaded_summary.iloc[0]["Source file name"] == "measurements.csv"
 
 
 def test_process_csv_file_writes_expected_output_name(tmp_path):

@@ -871,3 +871,7 @@ def csv_quantification_widget(viewer=None, **kwargs) -> QWidget:
     table.itemSelectionChanged.connect(_update_summary)
 
     return container
+
+# Advanced study-level CSV analysis widget.
+# Kept in a separate module so the original CSV Quantification widget remains stable.
+from ._csv_study_widget import csv_study_analysis_widget

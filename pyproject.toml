@@ -32,10 +32,12 @@ dependencies = [
     "numpy",
     "pandas",
     "openpyxl",
+    "xlrd",
     "matplotlib",
     "magicgui",
     "qtpy",
     "scikit-image",
+    "scikit-learn",
 ]
 
 [project.optional-dependencies]

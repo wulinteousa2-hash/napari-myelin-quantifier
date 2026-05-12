@@ -1,5 +1,12 @@
 include LICENSE
 include README.md
 
+exclude git_
+exclude git_.pub
+exclude github
+exclude github.pub
+global-exclude *.csv
+global-exclude *.xlsx
+
 recursive-exclude * __pycache__
 recursive-exclude * *.py[co]
