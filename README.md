@@ -11,9 +11,9 @@
 - Import raw label/object measurement CSV files and calculate myelin morphometric features into Excel workbooks.
 - Build study-level analyses from raw CSV or calculated Excel files, compare blinded/final groups, and export combined study results.
 
-Current version: `1.2.1`
+Current version: `1.3.1`
 
-Version `1.2.1` adds study-level CSV/Excel analysis, filename-based sample IDs for blinded files such as `119.csv`, resumable imports from `calculated_*.xlsx`, direct two- or three-way comparison plots, PCA/k-means, and user-selected output folders.
+Version `1.3.1` adds study-level CSV/Excel analysis, filename-based sample IDs for blinded files such as `119.csv`, resumable imports from `calculated_*.xlsx`, direct two- or three-way comparison plots, PCA/k-means, and user-selected output folders.
 
 ## Installation
 
