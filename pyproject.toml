@@ -1,7 +1,7 @@
 [project]
 name = "napari-myelin-quantifier"
 version = "1.4.1"
-description = "Myelinated Axon Quantification with Label Tracking"
+description = "2D myelinated axon morphometry from masks, CSV/Excel measurements, and study-level statistics"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [

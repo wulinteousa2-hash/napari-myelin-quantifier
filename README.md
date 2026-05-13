@@ -5,7 +5,9 @@
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-myelin-quantifier.svg?color=green)](https://python.org)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-myelin-quantifier)](https://napari-hub.org/plugins/napari-myelin-quantifier)
 
-`napari-myelin-quantifier` is a napari plugin for 2D myelinated axon analysis. It supports three related workflows:
+`napari-myelin-quantifier` is a napari plugin for 2D myelinated axon morphometry, supporting mask-based ring quantification, CSV/Excel morphometric calculation, study-level group comparison, sample-level statistics, PCA, and k-means clustering.
+
+It supports three related workflows:
 
 - Detect and quantify myelin rings from binary mask layers in napari.
 - Import raw label/object measurement CSV files and calculate myelin morphometric features into Excel workbooks.
