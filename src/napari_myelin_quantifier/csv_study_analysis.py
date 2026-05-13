@@ -44,6 +44,25 @@ PCA_DEFAULT_FEATURES = (
     "Thick mean axon diameter",
 )
 
+STATISTIC_METRICS = (
+    "Mean G-ratio",
+    "Median G-ratio",
+    "Standard deviation G-ratio",
+    "Mean myelin thickness",
+    "Median myelin thickness",
+    "Mean axon diameter",
+    "Median axon diameter",
+    "Thin percent",
+    "Medium percent",
+    "Thick percent",
+)
+
+STATISTIC_FACTORS = (
+    "Sample ID",
+    "Blind Group",
+    "Final Group",
+)
+
 
 def sample_id_for_path(
     path: str | Path, prefix_numeric: bool = False
@@ -225,6 +244,184 @@ def prepare_pca_input(
     feature_matrix = sample_summary[features].apply(pd.to_numeric, errors="coerce")
     valid_mask = feature_matrix.notna().all(axis=1)
     return sample_summary.loc[valid_mask, metadata_cols].reset_index(drop=True), feature_matrix.loc[valid_mask].reset_index(drop=True)
+
+
+def _sample_stat_df(
+    sample_summary: pd.DataFrame,
+    metrics: list[str],
+    factors: list[str],
+) -> pd.DataFrame:
+    columns = [column for column in [*metrics, *factors] if column in sample_summary.columns]
+    df = sample_summary[columns].copy()
+    for metric in metrics:
+        if metric in df.columns:
+            df[metric] = pd.to_numeric(df[metric], errors="coerce")
+    for factor in factors:
+        if factor in df.columns:
+            df[factor] = df[factor].astype(str).str.strip()
+            df.loc[df[factor] == "", factor] = np.nan
+    return df.dropna(subset=[*metrics, *factors]).reset_index(drop=True)
+
+
+def _describe_groups(df: pd.DataFrame, metric: str, factor: str) -> pd.DataFrame:
+    rows = []
+    for group, subset in df.groupby(factor, dropna=False):
+        values = pd.to_numeric(subset[metric], errors="coerce").dropna()
+        rows.append(
+            {
+                "Group": str(group),
+                "n": int(len(values)),
+                "Mean": float(values.mean()) if len(values) else np.nan,
+                "SD": float(values.std(ddof=1)) if len(values) > 1 else np.nan,
+                "Median": float(values.median()) if len(values) else np.nan,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def run_sample_t_test(
+    sample_summary: pd.DataFrame,
+    metric: str,
+    factor: str,
+    group_a: str,
+    group_b: str,
+    equal_var: bool = False,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run a sample-level two-group t-test."""
+    from scipy import stats
+
+    df = _sample_stat_df(sample_summary, [metric], [factor])
+    df = df[df[factor].isin([group_a, group_b])].copy()
+    values_a = df.loc[df[factor] == group_a, metric].dropna()
+    values_b = df.loc[df[factor] == group_b, metric].dropna()
+    if len(values_a) < 2 or len(values_b) < 2:
+        raise ValueError("T-test requires at least 2 samples in each group.")
+
+    statistic, p_value = stats.ttest_ind(values_a, values_b, equal_var=equal_var)
+    test_name = "Student t-test" if equal_var else "Welch t-test"
+    result = pd.DataFrame(
+        [
+            {
+                "Test": test_name,
+                "Metric": metric,
+                "Factor": factor,
+                "Group A": group_a,
+                "Group B": group_b,
+                "Statistic": float(statistic),
+                "p-value": float(p_value),
+            }
+        ]
+    )
+    return result, _describe_groups(df, metric, factor)
+
+
+def run_sample_one_way_anova(
+    sample_summary: pd.DataFrame,
+    metric: str,
+    factor: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run sample-level one-way ANOVA."""
+    from scipy import stats
+
+    df = _sample_stat_df(sample_summary, [metric], [factor])
+    groups = [
+        values[metric].dropna()
+        for _, values in df.groupby(factor)
+        if len(values[metric].dropna()) >= 2
+    ]
+    if len(groups) < 2:
+        raise ValueError("One-way ANOVA requires at least 2 groups with 2 samples each.")
+
+    statistic, p_value = stats.f_oneway(*groups)
+    result = pd.DataFrame(
+        [
+            {
+                "Test": "One-way ANOVA",
+                "Metric": metric,
+                "Factor": factor,
+                "Statistic": float(statistic),
+                "p-value": float(p_value),
+            }
+        ]
+    )
+    return result, _describe_groups(df, metric, factor)
+
+
+def run_sample_two_way_anova(
+    sample_summary: pd.DataFrame,
+    metric: str,
+    factor_a: str,
+    factor_b: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run sample-level two-way ANOVA with interaction."""
+    if factor_a == factor_b:
+        raise ValueError("Two-way ANOVA requires two different factors.")
+
+    from statsmodels.formula.api import ols
+    from statsmodels.stats.anova import anova_lm
+
+    df = _sample_stat_df(sample_summary, [metric], [factor_a, factor_b])
+    if df.empty:
+        raise ValueError("No complete sample-level rows are available for two-way ANOVA.")
+    model_df = pd.DataFrame(
+        {
+            "metric": df[metric],
+            "factor_a": df[factor_a],
+            "factor_b": df[factor_b],
+        }
+    )
+    model = ols("metric ~ C(factor_a) * C(factor_b)", data=model_df).fit()
+    anova = anova_lm(model, typ=2).reset_index().rename(columns={"index": "Effect"})
+    anova = anova.rename(
+        columns={
+            "sum_sq": "Sum Sq",
+            "df": "df",
+            "F": "F statistic",
+            "PR(>F)": "p-value",
+        }
+    )
+    anova.insert(0, "Test", "Two-way ANOVA")
+    anova.insert(1, "Metric", metric)
+    return anova, df.groupby([factor_a, factor_b], dropna=False)[metric].agg(
+        n="count", Mean="mean", SD="std", Median="median"
+    ).reset_index()
+
+
+def run_sample_manova(
+    sample_summary: pd.DataFrame,
+    metrics: list[str],
+    factor: str,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Run sample-level one-factor MANOVA."""
+    if len(metrics) < 2:
+        raise ValueError("MANOVA requires at least 2 metrics.")
+
+    from statsmodels.multivariate.manova import MANOVA
+
+    df = _sample_stat_df(sample_summary, metrics, [factor])
+    if df[factor].nunique() < 2:
+        raise ValueError("MANOVA requires at least 2 groups.")
+    if len(df) <= len(metrics):
+        raise ValueError("MANOVA requires more complete samples than metrics.")
+
+    model_df = pd.DataFrame({"group": df[factor]})
+    formula_metrics = []
+    for index, metric in enumerate(metrics):
+        column = f"metric_{index}"
+        model_df[column] = df[metric]
+        formula_metrics.append(column)
+
+    manova = MANOVA.from_formula(" + ".join(formula_metrics) + " ~ C(group)", data=model_df)
+    mv = manova.mv_test()
+    stats_df = (
+        mv.results["C(group)"]["stat"]
+        .reset_index()
+        .rename(columns={"index": "Statistic"})
+    )
+    stats_df.insert(0, "Test", "MANOVA")
+    stats_df.insert(1, "Factor", factor)
+    stats_df.insert(2, "Metrics", ", ".join(metrics))
+    return stats_df, df.groupby(factor, dropna=False)[metrics].mean().reset_index()
 
 
 def export_study_workbook(

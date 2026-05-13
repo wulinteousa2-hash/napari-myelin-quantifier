@@ -37,6 +37,8 @@ from .csv_quantification import (
 )
 from .csv_study_analysis import (
     PCA_DEFAULT_FEATURES,
+    STATISTIC_FACTORS,
+    STATISTIC_METRICS,
     add_sample_metadata,
     available_groups,
     build_combined_object_table,
@@ -44,6 +46,10 @@ from .csv_study_analysis import (
     export_study_workbook,
     prepare_pca_input,
     process_csv_file_with_metadata,
+    run_sample_manova,
+    run_sample_one_way_anova,
+    run_sample_t_test,
+    run_sample_two_way_anova,
     sample_id_for_path,
     sample_id_for_index,
     summarize_sample_features,
@@ -147,6 +153,7 @@ class CSVStudyAnalysisWidget(QWidget):
         self._build_qc_tab()
         self._build_plot_tab()
         self._build_compare_tab()
+        self._build_statistics_tab()
         self._build_pca_tab()
         self._build_export_tab()
 
@@ -397,6 +404,7 @@ class CSVStudyAnalysisWidget(QWidget):
         self.sample_summary_df = build_sample_summary_table(self.records)
         self._refresh_group_selectors()
         self._refresh_compare_selectors()
+        self._refresh_statistics_selectors()
 
     # ------------------------------------------------------------------
     # Tab 2
@@ -851,6 +859,187 @@ class CSVStudyAnalysisWidget(QWidget):
 
     # ------------------------------------------------------------------
     # Tab 5
+    # ------------------------------------------------------------------
+    def _build_statistics_tab(self) -> None:
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+
+        note = QLabel(
+            "Sample-level tests only. Each imported file/sample contributes one "
+            "summary value; object-level axon rows are not used for p-values."
+        )
+        note.setWordWrap(True)
+        layout.addWidget(note)
+
+        controls = QGroupBox("Statistical test")
+        grid = QGridLayout(controls)
+        self.stat_test_combo = QComboBox()
+        self.stat_test_combo.addItems(
+            [
+                "Two-group t-test",
+                "One-way ANOVA",
+                "Two-way ANOVA",
+                "MANOVA",
+            ]
+        )
+        self.stat_metric_combo = QComboBox()
+        self.stat_metric_combo.addItems(STATISTIC_METRICS)
+        self.stat_factor_a_combo = QComboBox()
+        self.stat_factor_a_combo.addItems(STATISTIC_FACTORS)
+        self.stat_factor_b_combo = QComboBox()
+        self.stat_factor_b_combo.addItems(STATISTIC_FACTORS)
+        self.stat_group_a_combo = QComboBox()
+        self.stat_group_b_combo = QComboBox()
+        self.stat_equal_var = QCheckBox("Student equal variance")
+        self.stat_run_button = QPushButton("Run Statistical Test")
+
+        grid.addWidget(QLabel("Test:"), 0, 0)
+        grid.addWidget(self.stat_test_combo, 0, 1)
+        grid.addWidget(QLabel("Metric:"), 1, 0)
+        grid.addWidget(self.stat_metric_combo, 1, 1)
+        grid.addWidget(QLabel("Factor A:"), 2, 0)
+        grid.addWidget(self.stat_factor_a_combo, 2, 1)
+        grid.addWidget(QLabel("Factor B:"), 3, 0)
+        grid.addWidget(self.stat_factor_b_combo, 3, 1)
+        grid.addWidget(QLabel("Group A:"), 4, 0)
+        grid.addWidget(self.stat_group_a_combo, 4, 1)
+        grid.addWidget(QLabel("Group B:"), 5, 0)
+        grid.addWidget(self.stat_group_b_combo, 5, 1)
+        grid.addWidget(self.stat_equal_var, 6, 0, 1, 2)
+        grid.addWidget(self.stat_run_button, 7, 0, 1, 2)
+        layout.addWidget(controls)
+
+        manova_box = QGroupBox("MANOVA metrics")
+        manova_layout = QGridLayout(manova_box)
+        self.stat_manova_checks: dict[str, QCheckBox] = {}
+        for index, metric in enumerate(STATISTIC_METRICS[:7]):
+            cb = QCheckBox(metric)
+            cb.setChecked(metric in ("Mean G-ratio", "Mean myelin thickness", "Mean axon diameter"))
+            self.stat_manova_checks[metric] = cb
+            manova_layout.addWidget(cb, index // 2, index % 2)
+        layout.addWidget(manova_box)
+
+        self.stat_text = QTextEdit()
+        self.stat_text.setReadOnly(True)
+        self.stat_text.setMaximumHeight(90)
+        layout.addWidget(self.stat_text)
+
+        self.stat_result_table = QTableWidget(0, 0)
+        self.stat_result_table.setMinimumHeight(150)
+        layout.addWidget(self.stat_result_table, stretch=1)
+
+        self.stat_group_table = QTableWidget(0, 0)
+        self.stat_group_table.setMinimumHeight(130)
+        layout.addWidget(self.stat_group_table, stretch=1)
+
+        self.stat_test_combo.currentTextChanged.connect(self._refresh_statistics_controls)
+        self.stat_factor_a_combo.currentTextChanged.connect(self._refresh_statistics_selectors)
+        self.stat_run_button.clicked.connect(self._run_statistics_test)
+
+        self.tabs.addTab(tab, "Statistics")
+        self._refresh_statistics_controls()
+
+    def _refresh_statistics_controls(self) -> None:
+        if not hasattr(self, "stat_test_combo"):
+            return
+        test = self.stat_test_combo.currentText()
+        is_ttest = test == "Two-group t-test"
+        is_two_way = test == "Two-way ANOVA"
+        is_manova = test == "MANOVA"
+        self.stat_metric_combo.setEnabled(not is_manova)
+        self.stat_factor_b_combo.setEnabled(is_two_way)
+        self.stat_group_a_combo.setEnabled(is_ttest)
+        self.stat_group_b_combo.setEnabled(is_ttest)
+        self.stat_equal_var.setEnabled(is_ttest)
+        for cb in self.stat_manova_checks.values():
+            cb.setEnabled(is_manova)
+        self._refresh_statistics_selectors()
+
+    def _refresh_statistics_selectors(self) -> None:
+        if not hasattr(self, "stat_group_a_combo"):
+            return
+        factor = self.stat_factor_a_combo.currentText()
+        values = available_groups(self.sample_summary_df, factor)
+        previous_a = self.stat_group_a_combo.currentText()
+        previous_b = self.stat_group_b_combo.currentText()
+        self.stat_group_a_combo.clear()
+        self.stat_group_b_combo.clear()
+        self.stat_group_a_combo.addItems(values)
+        self.stat_group_b_combo.addItems(values)
+        if previous_a in values:
+            self.stat_group_a_combo.setCurrentText(previous_a)
+        elif values:
+            self.stat_group_a_combo.setCurrentIndex(0)
+        if previous_b in values:
+            self.stat_group_b_combo.setCurrentText(previous_b)
+        elif len(values) > 1:
+            self.stat_group_b_combo.setCurrentIndex(1)
+
+    def _set_table_from_dataframe(self, table: QTableWidget, df: pd.DataFrame) -> None:
+        table.setRowCount(len(df))
+        table.setColumnCount(len(df.columns))
+        table.setHorizontalHeaderLabels([str(column) for column in df.columns])
+        for row_idx, (_, row) in enumerate(df.iterrows()):
+            for col_idx, column in enumerate(df.columns):
+                value = row.get(column, "")
+                if isinstance(value, float):
+                    value = _format_float(value)
+                table.setItem(row_idx, col_idx, _table_item(value))
+        table.resizeColumnsToContents()
+
+    def _run_statistics_test(self) -> None:
+        if self.sample_summary_df.empty:
+            self.status_label.setText("Process or load samples before running statistics.")
+            return
+
+        test = self.stat_test_combo.currentText()
+        metric = self.stat_metric_combo.currentText()
+        factor_a = self.stat_factor_a_combo.currentText()
+        factor_b = self.stat_factor_b_combo.currentText()
+        try:
+            if test == "Two-group t-test":
+                result, groups = run_sample_t_test(
+                    self.sample_summary_df,
+                    metric,
+                    factor_a,
+                    self.stat_group_a_combo.currentText(),
+                    self.stat_group_b_combo.currentText(),
+                    equal_var=self.stat_equal_var.isChecked(),
+                )
+            elif test == "One-way ANOVA":
+                result, groups = run_sample_one_way_anova(
+                    self.sample_summary_df, metric, factor_a
+                )
+            elif test == "Two-way ANOVA":
+                result, groups = run_sample_two_way_anova(
+                    self.sample_summary_df, metric, factor_a, factor_b
+                )
+            else:
+                metrics = [
+                    metric_name
+                    for metric_name, cb in self.stat_manova_checks.items()
+                    if cb.isChecked()
+                ]
+                result, groups = run_sample_manova(
+                    self.sample_summary_df, metrics, factor_a
+                )
+        except Exception as exc:
+            self.stat_text.setPlainText(str(exc))
+            self.status_label.setText(str(exc))
+            self.stat_result_table.setRowCount(0)
+            self.stat_group_table.setRowCount(0)
+            return
+
+        self.stat_text.setPlainText(
+            f"{test} completed using sample-level summary rows only.\n"
+            f"Samples analyzed: {len(self.sample_summary_df)}"
+        )
+        self._set_table_from_dataframe(self.stat_result_table, result)
+        self._set_table_from_dataframe(self.stat_group_table, groups)
+        self.status_label.setText(f"Ran sample-level {test}.")
+
+    # ------------------------------------------------------------------
+    # Tab 6
     # ------------------------------------------------------------------
     def _build_pca_tab(self) -> None:
         try:

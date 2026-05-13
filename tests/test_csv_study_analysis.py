@@ -9,6 +9,10 @@ from napari_myelin_quantifier.csv_quantification import (
 )
 from napari_myelin_quantifier.csv_study_analysis import (
     process_csv_file_with_metadata,
+    run_sample_manova,
+    run_sample_one_way_anova,
+    run_sample_t_test,
+    run_sample_two_way_anova,
     sample_id_for_path,
 )
 
@@ -77,3 +81,60 @@ def test_sample_id_strips_calculated_prefix():
 def test_sample_id_can_prefix_numeric_filename():
     assert sample_id_for_path("119.csv", prefix_numeric=True) == "S119"
     assert sample_id_for_path("S119.csv", prefix_numeric=True) == "S119"
+
+
+def _sample_summary_df():
+    return pd.DataFrame(
+        {
+            "Sample ID": [f"S{i:03d}" for i in range(1, 9)],
+            "Blind Group": ["A", "A", "A", "A", "B", "B", "B", "B"],
+            "Final Group": ["Ctl", "Ctl", "Tx", "Tx", "Ctl", "Ctl", "Tx", "Tx"],
+            "Mean G-ratio": [0.60, 0.62, 0.64, 0.66, 0.76, 0.78, 0.80, 0.82],
+            "Mean myelin thickness": [0.20, 0.21, 0.24, 0.25, 0.31, 0.32, 0.35, 0.36],
+            "Mean axon diameter": [1.1, 1.2, 1.4, 1.5, 2.1, 2.2, 2.4, 2.5],
+        }
+    )
+
+
+def test_sample_level_t_test_returns_p_value():
+    result, groups = run_sample_t_test(
+        _sample_summary_df(), "Mean G-ratio", "Blind Group", "A", "B"
+    )
+
+    assert "p-value" in result.columns
+    assert result.iloc[0]["p-value"] < 0.05
+    assert set(groups["Group"]) == {"A", "B"}
+
+
+def test_sample_level_one_way_anova_returns_p_value():
+    result, groups = run_sample_one_way_anova(
+        _sample_summary_df(), "Mean G-ratio", "Blind Group"
+    )
+
+    assert "p-value" in result.columns
+    assert result.iloc[0]["p-value"] < 0.05
+    assert len(groups) == 2
+
+
+def test_sample_level_two_way_anova_returns_effects():
+    result, groups = run_sample_two_way_anova(
+        _sample_summary_df(), "Mean G-ratio", "Blind Group", "Final Group"
+    )
+
+    assert "p-value" in result.columns
+    assert {"C(factor_a)", "C(factor_b)", "C(factor_a):C(factor_b)"}.issubset(
+        set(result["Effect"])
+    )
+    assert len(groups) == 4
+
+
+def test_sample_level_manova_returns_multivariate_stats():
+    result, groups = run_sample_manova(
+        _sample_summary_df(),
+        ["Mean G-ratio", "Mean myelin thickness", "Mean axon diameter"],
+        "Blind Group",
+    )
+
+    assert "Statistic" in result.columns
+    assert "Pr > F" in result.columns
+    assert len(groups) == 2

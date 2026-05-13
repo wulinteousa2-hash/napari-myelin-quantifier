@@ -248,7 +248,7 @@ The CSV panel can generate:
 
 ## CSV Study Analysis Workflow
 
-Use `CSV Study Analysis` when you want to compare multiple samples, assign blind and final group labels, resume from calculated Excel files, make group plots, run PCA/k-means, or export one study workbook.
+Use `CSV Study Analysis` when you want to compare multiple samples, assign blind and final group labels, resume from calculated Excel files, make group plots, run sample-level statistics, run PCA/k-means, or export one study workbook.
 
 Supported inputs:
 
@@ -295,6 +295,27 @@ Choose comparison values A, B, and optionally C, then generate:
 - G-ratio vs myelin thickness scatter overlays
 
 This is intended for straightforward subject-vs-subject, blind-group, or final-group comparisons with overlapping plots.
+
+### Sample-Level Statistics
+
+The `Statistics` tab runs classical tests on sample-level summary rows only. Each imported file/sample contributes one value per metric, so p-values are not inflated by treating individual axons from the same sample as independent biological replicates.
+
+Available tests:
+
+- `Two-group t-test`: Welch t-test by default, with an option for Student equal-variance t-test.
+- `One-way ANOVA`: compare one sample-level metric across groups.
+- `Two-way ANOVA`: test two grouping factors and their interaction.
+- `MANOVA`: test multiple sample-level metrics together against one grouping factor.
+
+Available factors:
+
+- `Sample ID`
+- `Blind Group`
+- `Final Group`
+
+Available metrics include mean/median G-ratio, myelin thickness, axon diameter, and axon size class percentages.
+
+The statistics output includes the test statistic, p-value, and group-level n/mean/standard deviation summaries where applicable.
 
 ### Study Outputs
 

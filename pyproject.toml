@@ -38,6 +38,8 @@ dependencies = [
     "qtpy",
     "scikit-image",
     "scikit-learn",
+    "scipy",
+    "statsmodels",
 ]
 
 [project.optional-dependencies]
