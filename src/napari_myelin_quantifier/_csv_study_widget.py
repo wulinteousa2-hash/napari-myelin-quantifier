@@ -877,7 +877,9 @@ class CSVStudyAnalysisWidget(QWidget):
         self.analysis_level_combo = QComboBox()
         self.analysis_level_combo.addItems(["Sample-level only"])
         self.pca_group_color_combo = QComboBox()
-        self.pca_group_color_combo.addItems(["Blind Group", "Final Group", "Sample ID"])
+        self.pca_group_color_combo.addItems(
+            ["Blind Group", "Final Group", "Sample ID", "Cluster (k-means)"]
+        )
         self.kmeans_spin = QSpinBox()
         self.kmeans_spin.setRange(2, 10)
         self.kmeans_spin.setValue(2)
@@ -943,6 +945,7 @@ class CSVStudyAnalysisWidget(QWidget):
         self.btn_run_pca.clicked.connect(lambda: self._run_pca(run_kmeans=False))
         self.btn_run_kmeans.clicked.connect(lambda: self._run_pca(run_kmeans=True, plot_kmeans_only=True))
         self.btn_run_both.clicked.connect(lambda: self._run_pca(run_kmeans=True))
+        self.pca_group_color_combo.currentTextChanged.connect(self._replot_pca_result)
 
         self.tabs.addTab(tab, "PCA / Clustering")
 
@@ -987,6 +990,9 @@ class CSVStudyAnalysisWidget(QWidget):
             labels = KMeans(n_clusters=n_clusters, random_state=0, n_init=10).fit_predict(scaled)
             result["Cluster"] = labels.astype(int)
             self.last_kmeans_n = n_clusters
+            self.pca_group_color_combo.setCurrentText("Cluster (k-means)")
+        else:
+            self.last_kmeans_n = None
 
         self.pca_cluster_df = result
         self.selected_pca_features = features
@@ -998,28 +1004,55 @@ class CSVStudyAnalysisWidget(QWidget):
             f"PCA input samples: {len(result)}\n"
             f"Features used: {', '.join(features)}\n"
             f"Explained variance: PC1={ev[0]:.2f}%, PC2={ev[1]:.2f}%\n"
-            f"K-means: {'n=' + str(self.last_kmeans_n) if run_kmeans else 'not run'}"
+            f"K-means: {'n=' + str(self.last_kmeans_n) if run_kmeans else 'not run'}\n"
+            f"Graph color: {self.pca_group_color_combo.currentText()}"
         )
         if plot_kmeans_only:
             self.status_label.setText("Ran k-means using sample-level scaled features and refreshed PCA projection.")
         else:
             self.status_label.setText("Ran sample-level PCA" + (" + k-means." if run_kmeans else "."))
 
+    def _pca_color_column(self, result: pd.DataFrame) -> str:
+        requested = self.pca_group_color_combo.currentText()
+        if requested == "Cluster (k-means)":
+            if "Cluster" in result.columns and result["Cluster"].astype(str).str.len().gt(0).any():
+                return "Cluster"
+            return "Sample ID"
+        return requested
+
+    def _replot_pca_result(self) -> None:
+        if self.pca_cluster_df.empty:
+            return
+        self._plot_pca_result(self.pca_cluster_df)
+
     def _plot_pca_result(self, result: pd.DataFrame) -> None:
         self.pca_figure.clear()
         ax = self.pca_figure.add_subplot(111)
-        color_col = self.pca_group_color_combo.currentText()
-        groups = available_groups(result, color_col)
+        color_col = self._pca_color_column(result)
+        plot_df = result.copy()
+        if color_col == "Cluster":
+            plot_df[color_col] = plot_df[color_col].apply(
+                lambda value: f"Cluster {int(value)}" if str(value).strip() != "" else ""
+            )
+        groups = available_groups(plot_df, color_col)
         if not groups:
             groups = ["All"]
         for group in groups:
-            subset = result if group == "All" else result[result[color_col].astype(str) == group]
-            ax.scatter(subset["PC1"], subset["PC2"], s=42, label=group)
+            subset = plot_df if group == "All" else plot_df[plot_df[color_col].astype(str) == group]
+            ax.scatter(
+                subset["PC1"],
+                subset["PC2"],
+                s=56 if color_col == "Cluster" else 42,
+                alpha=0.85,
+                edgecolors="black" if color_col == "Cluster" else "none",
+                linewidths=0.5 if color_col == "Cluster" else 0,
+                label=group,
+            )
             for _, row in subset.iterrows():
                 ax.text(row["PC1"], row["PC2"], str(row.get("Sample ID", "")), fontsize=8)
         ax.set_xlabel("PC1")
         ax.set_ylabel("PC2")
-        ax.set_title("Sample-level PCA")
+        ax.set_title(f"Sample-level PCA colored by {color_col}")
         with suppress(Exception):
             ax.legend(fontsize=8)
         self.pca_canvas.draw()
