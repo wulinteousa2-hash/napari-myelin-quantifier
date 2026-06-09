@@ -4,6 +4,7 @@
 [![PyPI](https://img.shields.io/pypi/v/napari-myelin-quantifier.svg?color=green)](https://pypi.org/project/napari-myelin-quantifier)
 [![Python Version](https://img.shields.io/pypi/pyversions/napari-myelin-quantifier.svg?color=green)](https://python.org)
 [![napari hub](https://img.shields.io/endpoint?url=https://api.napari-hub.org/shields/napari-myelin-quantifier)](https://napari-hub.org/plugins/napari-myelin-quantifier)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.20615078.svg)](https://doi.org/10.5281/zenodo.20615078)
 
 `napari-myelin-quantifier` is a napari plugin for 2D myelinated axon morphometry, supporting mask-based ring quantification, CSV/Excel morphometric calculation, study-level group comparison, sample-level statistics, PCA, and k-means clustering.
 
